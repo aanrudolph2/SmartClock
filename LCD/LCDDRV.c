@@ -10,7 +10,7 @@
 
 /* INTERNAL USE ONLY */
 
-void command(unsigned char c)
+void command(uint8_t cmd)
 {
 	PORTD &= ~(1 << CS);
 	PORTD &= ~(1 << RS);
@@ -18,7 +18,7 @@ void command(unsigned char c)
 	// Write high byte
 
 	PORTD |= (1 << E);
-	PORTD |= c >> 4;
+	PORTD |= cmd >> 4;
 	PORTD &= ~(1 << E);
 
 	PORTD &= ~(0x0F);
@@ -26,7 +26,7 @@ void command(unsigned char c)
 	// Write low byte
 
 	PORTD |= (1 << E);
-	PORTD |= c & 0x0F;
+	PORTD |= cmd & 0x0F;
 	PORTD &= ~(1 << E);
 
 	PORTD &= ~(0x0F);
@@ -34,7 +34,7 @@ void command(unsigned char c)
 	PORTD |= (1 << CS);
 
 }
-void data(unsigned char d)
+void data(uint8_t data)
 {
 	PORTD &= ~(1 << CS);
 	PORTD |= (1 << RS);
@@ -42,7 +42,7 @@ void data(unsigned char d)
 	// Write high byte
 
 	PORTD |= (1 << E);
-	PORTD |= ((d >> 4) & 0x0F);
+	PORTD |= ((data >> 4) & 0x0F);
 	PORTD &= ~(1 << E);
 
 	PORTD &= ~(0x0F);
@@ -50,12 +50,22 @@ void data(unsigned char d)
 	// Write low byte
 
 	PORTD |= (1 << E);
-	PORTD |= (d & 0x0F);
+	PORTD |= (data & 0x0F);
 	PORTD &= ~(1 << E);
 
 	PORTD &= ~(0x0F);
 
 	PORTD |= (1 << CS);
+}
+
+void Str(uint8_t * buf)
+{
+	int i = 0;
+	while(buf[i] != 0)
+	{
+		data(buf[i]);
+		i ++;
+	}
 }
 
 /* PUBLIC INIT ROUTINE */
@@ -78,7 +88,7 @@ void Init()
 	command(0xD5);  //set display clock divide ratio/oscillator frequency
 	command(0x70);  //set display clock divide ratio/oscillator frequency
 	command(0x78);  //OLED command set disabled
-	command(0x09);  //extended function set (2 lines) - Wraps at char 19 instead of 39.
+	command(0x09);  //extended function set (4 lines) - Wraps at char 19 instead of 39.
 	command(0x06);  //COM SEG direction (Visual flipping of characters and lines)
 	command(0x72);  //function selection B, disable internal Vdd regualtor
 	data(0x00);     //ROM CGRAM selection - Table A (Standard/Latin Characters)
@@ -102,14 +112,51 @@ void Init()
 	command(0x0C);  //display ON
 }
 
-/* WRITE STRING TO DISPLAY */
-
-void Str(uint8_t * buf)
+DisplayPage CreatePage(uint8_t * str)
 {
-	int i = 0;
-	while(buf[i] != 0)
+	DisplayPage page = malloc(sizeof(DisplayPage));
+
+	uint8_t * line1 = malloc(20*sizeof(uint8_t));
+	uint8_t * line2 = malloc(20*sizeof(uint8_t));
+
+	sprintf(line1, "                    ");
+	sprintf(line2, "                    ");
+
+	int strc = 0;
+	int cnt = 0;
+
+	while(str[strc] != 0 && str[strc] != '\n' && cnt < LINE_LENGTH)
 	{
-		data(buf[i]);
-		i ++;
+		line1[cnt] = str[strc];
+		strc ++;
+		cnt ++;
 	}
+
+	if(str[strc] == '\n')
+	{
+		strc ++;
+	}
+	cnt = 0;
+
+	while(str[strc] != 0 && cnt < LINE_LENGTH)
+	{
+		line2[cnt] = str[strc];
+		strc ++;
+		cnt ++;
+	}
+
+	page->line1 = line1;
+	page->line2 = line2;
+
+	return page;
+}
+void DeletePage(DisplayPage page)
+{
+	free(page);
+}
+void WritePage(DisplayPage page)
+{
+	command(0x02);
+	Str(page->line1);
+	Str(page->line2);
 }
